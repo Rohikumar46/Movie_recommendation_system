@@ -8,11 +8,16 @@ import bs4 as bs
 import urllib.request
 import pickle
 import requests
+import pandas as pd
+
 
 # load the nlp model and tfidf vectorizer from disk
 filename = 'nlp_model.pkl'
 clf = pickle.load(open(filename, 'rb'))
 vectorizer = pickle.load(open('tranform.pkl','rb'))
+df = pd.read_csv('./datasets/movie_metadata.csv')
+
+
 
 def create_similarity():
     data = pd.read_csv('main_data.csv')
@@ -22,6 +27,11 @@ def create_similarity():
     # creating a similarity score matrix
     similarity = cosine_similarity(count_matrix)
     return data,similarity
+
+def sort_by_imdb_score(dataset):
+    sorted_dataset = dataset.sort_values(by='imdb_score', ascending=False)
+    return sorted_dataset
+
 
 def rcmd(m):
     m = m.lower()
@@ -54,6 +64,45 @@ def get_suggestions():
     data = pd.read_csv('main_data.csv')
     return list(data['movie_title'].str.capitalize())
 
+
+
+def get_movie_posters(arr, my_api_key="054feede5a3ca3c1f02bf7fe9e71c761"):
+    arr_details_list = []
+    base_url = "https://api.themoviedb.org/3/search/movie"
+    
+    for movie in arr:
+        params = {
+            'api_key': my_api_key,
+            'query': movie
+        }
+
+        try:
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()  # Raise an HTTPError for bad requests
+            m_data = response.json()
+
+            # Check if the response contains the expected data
+            if 'results' in m_data and m_data['results']:
+                # Extract title and poster URL
+                title = m_data['results'][0]['title']
+                poster_path = m_data['results'][0]['poster_path']
+                poster_url = f"https://image.tmdb.org/t/p/original{poster_path}" if poster_path else None
+            else:
+                # Set title and poster to None if data is not available
+                title = None
+                poster_url = None
+
+            # Append the tuple (title, poster) to the list
+            arr_details_list.append((title, poster_url))
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error: {e}")
+            # Append the tuple (None, None) in case of an error
+            arr_details_list.append((None, None))
+    
+    return arr_details_list
+
+    
 app = Flask(__name__)
 
 @app.route("/")
@@ -127,5 +176,48 @@ def recommend():
         vote_count=vote_count,release_date=release_date,runtime=runtime,status=status,genres=genres,
         movie_cards=movie_cards,reviews=movie_reviews)
 
+@app.route('/imbd_list')
+def index():
+    # Sort the dataset by IMDb score
+    sorted_dataset = sort_by_imdb_score(df)
+    
+    # Select the top 10 movies
+    top_10 = sorted_dataset.head(10) 
+    
+    # Extract required columns for each movie
+    top_10_info = top_10[['movie_title', 'movie_imdb_link', 'imdb_score']]
+    
+    # Initialize empty lists to store title and poster details
+    titles = []
+    posters = []
+
+    # Iterate through each movie to get details
+    for _, row in top_10_info.iterrows():
+        
+        # Fetch title and poster using the movie title from the current row
+        details = get_movie_posters([row['movie_title']])[0]
+        
+        # Ensure that details is not None
+        if details:
+            title, poster = details
+
+            # Print the title and poster for debugging
+            print(title, poster)
+
+            # Append title and poster to the respective lists
+            titles.append(title)
+            posters.append(poster)
+
+    # Add title and poster details to the DataFrame
+    top_10_info['title'] = titles
+    top_10_info['poster'] = posters
+
+    # Convert DataFrame to a list of dictionaries
+    top_10_list = top_10_info.to_dict(orient='records')
+
+    return render_template('imbd_list.html', top_10_list=top_10_list)
+
+
 if __name__ == '__main__':
     app.run(debug=True)
+

@@ -284,3 +284,55 @@ function get_movie_posters(arr, my_api_key) {
     }
     return arr_poster_list;
 }
+$(function () {
+    // Button will be disabled until we type anything inside the input field
+    const source = document.getElementById("autoComplete");
+    const inputHandler = function (e) {
+        if (e.target.value == "") {
+            $(".movie-button").attr("disabled", true);
+        } else {
+            $(".movie-button").attr("disabled", false);
+        }
+    };
+    source.addEventListener("input", inputHandler);
+
+    $(".movie-button").on("click", function () {
+        var my_api_key = "054feede5a3ca3c1f02bf7fe9e71c761";
+        var title = $(".movie").val();
+        if (title == "") {
+            $(".results").css("display", "none");
+            $(".fail").css("display", "block");
+        } else {
+            load_details(my_api_key, title);
+        }
+    });
+
+    // Sorting movies by IMDb rating
+    $(".sort-imdb-button").on("click", function () {
+        sortMoviesByImdbRating();
+    });
+});
+
+// Function to sort movies by IMDb rating
+function sortMoviesByImdbRating() {
+    // Assuming movie_cards is an array of objects with 'imdb_rating' property
+    movie_cards.sort(function (a, b) {
+        // Convert IMDb ratings to numbers for comparison
+        const ratingA = parseFloat(a.imdb_rating);
+        const ratingB = parseFloat(b.imdb_rating);
+
+        // Compare IMDb ratings
+        if (ratingA < ratingB) {
+            return 1; // Sort descending, change to -1 for ascending
+        } else if (ratingA > ratingB) {
+            return -1; // Sort descending, change to 1 for ascending
+        } else {
+            return 0; // Ratings are equal
+        }
+    });
+
+    // Now, you can re-render your movie cards based on the sorted movie_cards array
+    renderMovieCards();
+}
+
+// Rest of your existing code...
